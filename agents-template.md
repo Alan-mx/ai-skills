@@ -80,6 +80,7 @@
 - 方法粒度：单调用点的辅助逻辑直接内联进调用方，仅 ≥2 调用点复用或事件回调入口才抽方法
 - 抛业务异常前先 `log.warn` 带单据上下文（ID / vendorId / 行号）再 throw
 - 集合返回值用空集合（如 `Collections.emptyList()`），不返回 null
+- 禁止内联全限定类名（`java.math.RoundingMode.HALF_UP` 这类写法）：一律 import 后用简单类名；仅同名类冲突需区分时例外并注释
 
 {{项目附加}}
 
