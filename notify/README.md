@@ -81,7 +81,7 @@ AI 编码 agent 的任务提醒钩子：**单文件 node 实现，零依赖**（
 
 | 渠道 | 需要的字段 | 说明 |
 |------|-----------|------|
-| `desktop` | 无 | Windows 托盘气泡通知（Win10/11 渲染为系统通知），非 win32 平台自动跳过 |
+| `desktop` | 无 | Windows WinRT toast（**留在通知中心，事后能翻到**；调用失败退回托盘气泡），非 win32 平台自动跳过。**系统「通知」总开关关着（设置 → 系统 → 通知，或 `HKCU\...\PushNotifications\ToastEnabled=0`）时命令不报错但屏幕无显示**，用不了就把该渠道 `enabled` 置 false |
 | `ntfy` | `url` | `https://ntfy.sh/<随机topic>`，手机装 ntfy App 订阅同一 topic；可自建 |
 | `bark` | `url` | `https://api.day.app/<deviceKey>`，iOS |
 | `dingtalk` | `url` + `secret` | 群机器人加签：`timestamp`(毫秒) 与 HMAC-SHA256(`secret`, `ts\nsecret`) |
@@ -145,7 +145,7 @@ node $env:USERPROFILE\.claude\notify-hook.js --app="Claude Code" --test
 
 ## 已知局限
 
-- 桌面通知走 PowerShell 托盘气泡（子进程存活 9 秒），无 WinRT 应用标识注册问题；但只实现了 Windows，其他平台该渠道跳过。
+- 桌面通知走 WinRT toast（`ToastGeneric` 两段文本，标题 + 正文），会留在 Windows 通知中心；调用失败退回 9 秒托盘气泡。二者都受系统通知总开关管辖：开关关着时命令成功但屏幕上什么都没有。只实现了 Windows，其他平台该渠道跳过。
 - 兜底渠道靠分离子进程 `setTimeout` 排队，机器重启/关机则排队丢失（不会补发）——兜底本就允许丢，快渠道在事件当时已发。
 - node 的 HTTP 请求不读系统代理；若某渠道需经代理访问，得单独配代理（当前未实现）。
 - 企业微信文本消息上限 2048 字节，超长内容会被截断（本钩子消息很短，未做处理）。

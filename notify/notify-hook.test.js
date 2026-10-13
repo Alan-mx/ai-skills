@@ -69,6 +69,15 @@ t('渲染：纯文本不带 markdown 记号、markdown 带加粗与引用条', (
   assert.strictEqual(hook.renderMarkdown(m), '**✔ 任务完成 · Codex**\n\n> **会话 ID:** s\n>\n> **状态:** 已完成\n>\n> **耗时:** 44秒\n>\n> **项目:** D:\\pms');
 });
 
+t('桌面 toast XML：文本转义，避免 & < > 破坏 XML', () => {
+  assert.strictEqual(hook.xmlEscape('a & b <c> "d" \'e\''), 'a &amp; b &lt;c&gt; &quot;d&quot; &apos;e&apos;');
+  const xml = hook.toastXml('标题 & 说明', '正文 <b>');
+  assert.ok(xml.startsWith('<toast><visual><binding template="ToastGeneric">'), xml);
+  assert.ok(xml.includes('<text>标题 &amp; 说明</text>'), xml);
+  assert.ok(xml.includes('<text>正文 &lt;b&gt;</text>'), xml);
+  assert.ok(xml.endsWith('</binding></visual></toast>'), xml);
+});
+
 // --- 客户端名解析：--app= > appName > 环境变量 > AI ---
 t('resolveApp 优先级与推断', () => {
   const empty = hook.getDefaultConfig();

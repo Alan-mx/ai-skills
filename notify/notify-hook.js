@@ -35,7 +35,7 @@ const os = require('os');
 const crypto = require('crypto');
 const http = require('http');
 const https = require('https');
-const { spawn } = require('child_process');
+const { spawn, execFileSync } = require('child_process');
 
 const HOME = os.homedir();
 const DEFAULT_CONFIG_PATH = path.join(HOME, '.claude', 'notify-config.json');
@@ -214,17 +214,40 @@ function postText(url, text) { return request(url, text, 'text/plain'); }
 
 // --- 渠道发送 ---
 function psQuote(s) { return "'" + String(s).replace(/'/g, "''") + "'"; }
+function xmlEscape(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;'); }
 
+// 桌面通知 XML：ToastGeneric 两段文本（标题 + 正文，正文换行原样保留）
+function toastXml(title, msg) {
+  return '<toast><visual><binding template="ToastGeneric">' +
+    `<text>${xmlEscape(title)}</text><text>${xmlEscape(msg)}</text>` +
+    '</binding></visual></toast>';
+}
+
+// 桌面通知走 WinRT toast（会留在 Windows 通知中心，事后能翻到）；失败退回托盘气泡。
+// 注意：系统「通知」总开关关着（HKCU\...\PushNotifications\ToastEnabled=0）时，两种都看不见——
+// 命令不报错但屏幕上没东西，所以配置里该渠道默认由使用方决定开关。
 function sendDesktop(title, msg) {
-  if (process.platform !== 'win32') return Promise.resolve({ ok: true, skipped: 'non-win32' });   // 当前只实现 Windows 桌面通知
-  const ps = 'Add-Type -AssemblyName System.Windows.Forms;Add-Type -AssemblyName System.Drawing;' +
-    '$n=New-Object System.Windows.Forms.NotifyIcon;$n.Icon=[System.Drawing.SystemIcons]::Information;$n.Visible=$true;' +
-    `$n.ShowBalloonTip(8000,${psQuote(title)},${psQuote(msg)},[System.Windows.Forms.ToolTipIcon]::Info);` +
-    'Start-Sleep -Seconds 9;$n.Dispose()';
+  if (process.platform !== 'win32') return Promise.resolve({ ok: true, skipped: 'non-win32' });
+  const ps = [
+    '[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType=WindowsRuntime] | Out-Null;',
+    '[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom, ContentType=WindowsRuntime] | Out-Null;',
+    `$xml = New-Object Windows.Data.Xml.Dom.XmlDocument; $xml.LoadXml(${psQuote(toastXml(title, msg))});`,
+    '$appId = (Get-StartApps | Where-Object { $_.Name -like "*PowerShell*" } | Select-Object -First 1).AppID;',
+    'if (-not $appId) { $appId = "{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe" }',
+    '$toast = New-Object Windows.UI.Notifications.ToastNotification $xml;',
+    '[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($appId).Show($toast);'
+  ].join(' ');
   try {
-    spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', ps], { detached: true, stdio: 'ignore' }).unref();
-  } catch (e) {}
-  return Promise.resolve({ ok: true });
+    execFileSync('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', ps], { timeout: 8000, stdio: ['ignore', 'pipe', 'pipe'] });
+    return Promise.resolve({ ok: true, body: 'toast' });
+  } catch (e) {
+    const balloon = 'Add-Type -AssemblyName System.Windows.Forms;Add-Type -AssemblyName System.Drawing;' +
+      '$n=New-Object System.Windows.Forms.NotifyIcon;$n.Icon=[System.Drawing.SystemIcons]::Information;$n.Visible=$true;' +
+      `$n.ShowBalloonTip(8000,${psQuote(title)},${psQuote(msg)},[System.Windows.Forms.ToolTipIcon]::Info);` +
+      'Start-Sleep -Seconds 9;$n.Dispose()';
+    try { spawn('powershell.exe', ['-NoProfile', '-WindowStyle', 'Hidden', '-Command', balloon], { detached: true, stdio: 'ignore' }).unref(); } catch (e2) {}
+    return Promise.resolve({ ok: true, body: 'toast 失败，已退托盘气泡: ' + String(e.message).slice(0, 80) });
+  }
 }
 
 function sendChannel(name, cfg, msg) {
@@ -421,6 +444,7 @@ function main() {
 module.exports = {
   DEFAULT_CONFIG, getDefaultConfig, loadConfig, resolveConfigPath, stateDirOf, resolveApp,
   fmtDuration, fieldsOf, KIND_ICON, withIcon, buildStopMsg, buildNotifyMsg, renderBody, renderPlain, renderMarkdown,
+  xmlEscape, toastXml,
   firstDefined, normEvent, pickSessionId, pickCwd, pickMessage, pickStatus,
   signDingtalk, signFeishu, dingtalkUrl, enabledChannels, planJobs, dispatch, runJob, runSelfTest,
   handleEvent, onStop, onNotification, onUserPromptSubmit, onActivity, onSessionEnd,
