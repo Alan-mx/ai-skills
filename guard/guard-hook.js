@@ -1,7 +1,12 @@
 #!/usr/bin/env node
 'use strict';
-// PreToolUse guard. Minimal permissions.deny handles prefix-stable catastrophic actions;
-// this hook handles the fuzzy/combinatorial ones.
+// PreToolUse guard for any hook host speaking the Claude Code hook protocol
+// (Claude Code / Codex CLI / others). Minimal permissions.deny handles prefix-stable catastrophic
+// actions; this hook handles the fuzzy/combinatorial ones.
+//
+// 通用性：输入字段按多套命名读取（tool_name|toolName|tool、tool_input|input|args、cwd|working_dir），
+// shell 类工具名按集合识别（Bash / shell / local_shell / run_command ...），输出同时给新旧两种
+// 拦截形状（decision:block 与 hookSpecificOutput.permissionDecision:deny），任一家认一种即可生效。
 //
 // Blocked:
 //   - mvn/mvnw deploy (any invocation path: mvn / mvn.cmd / mvn.exe / mvnw / full path / JAVA_HOME=x mvn)
@@ -50,21 +55,48 @@ function tokenizeArgs(seg) {
   return toks;
 }
 
+function firstDefined(obj, keys) {
+  for (const k of keys) {
+    const v = obj ? obj[k] : undefined;
+    if (v !== undefined && v !== null && v !== '') return v;
+  }
+  return undefined;
+}
+
+// 工具名归一化后比对（去掉大小写与 _ - 分隔差异：local_shell -> localshell）
+function normTool(name) { return String(name || '').toLowerCase().replace(/[^a-z0-9]/g, ''); }
+const SHELL_TOOLS = ['bash', 'shell', 'localshell', 'shellcommand', 'runcommand', 'exec', 'execcommand', 'command', 'terminal'];
+
+// 削掉命令替换/子 shell 语法带来的尾随标点：`n=$(grep x y 2>/dev/null)` 里重定向目标会被捕成
+// `/dev/null)`，不过滤就会把设备白名单判掉（实测误拦过）。只削尾部标点，路径本体不变。
+function cleanTarget(t) { return String(t || '').replace(/[)\]}"',;]+$/, ''); }
+
 try {
   const raw = readStdin();
   if (!raw) process.exit(0);
   let payload;
   try { payload = JSON.parse(raw); } catch (e) { process.exit(0); }
-  if (!payload || payload.tool_name !== 'Bash') process.exit(0);
-  const command = (payload.tool_input && payload.tool_input.command) || '';
+  if (!payload || typeof payload !== 'object') process.exit(0);
+
+  // 输入字段容错：各宿主键名不一；工具名缺失时不跳过，按"有命令就分析"处理（fail-safe）
+  const toolInput = firstDefined(payload, ['tool_input', 'toolInput', 'input', 'arguments', 'args']) || {};
+  const command = String(firstDefined(toolInput, ['command', 'cmd', 'script']) || firstDefined(payload, ['command']) || '');
+  const toolName = normTool(firstDefined(payload, ['tool_name', 'toolName', 'tool', 'capability', 'name']));
   if (!command) process.exit(0);
+  if (toolName && !SHELL_TOOLS.includes(toolName)) process.exit(0);   // 明确不是 shell 类工具 -> 不管
 
   const norm = command.replace(/\s+/g, ' ');
   // Quote-stripped copy: for redirect/pipe checks so < > | inside SQL/strings aren't matched.
   const stripped = norm.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '');
 
+  // 同时给新旧两种拦截形状：decision:block 是旧写法（Claude Code 与 Codex 都认），
+  // hookSpecificOutput.permissionDecision 是新写法；哪家认哪种都能拦住，reason 必非空。
   function block(reason) {
-    process.stdout.write(JSON.stringify({ decision: 'block', reason }));
+    process.stdout.write(JSON.stringify({
+      decision: 'block',
+      reason,
+      hookSpecificOutput: { hookEventName: 'PreToolUse', permissionDecision: 'deny', permissionDecisionReason: reason }
+    }));
     process.exit(0);
   }
 
@@ -145,7 +177,7 @@ try {
   // --- Rule B: recycle-bin delete guidance (cwd-in delete of non-rebuildable -> block) ---
   // 写/删/移/改类命令的目标路径解析：cwd 外且非临时区直接 block(只读)；cwd 内删除非可重建产物 block 并引导送回收站。
   // 路径规范化处理 ~、C:\、/c/、相对(基于 cwd)；用 norm(保留引号) 分段解析，解析失败 fail-open 放行。
-  const cwd = payload.cwd || process.cwd();
+  const cwd = firstDefined(payload, ['cwd', 'working_dir', 'workingDir', 'workdir', 'project_path']) || process.cwd();
   if (cwd) {
     const home = (payload.env && (payload.env.HOME || payload.env.USERPROFILE)) || process.env.HOME || process.env.USERPROFILE || '';
     const tmpdirEnv = (payload.env && (payload.env.TMPDIR || payload.env.TMP || payload.env.TEMP)) || process.env.TMPDIR || process.env.TMP || process.env.TEMP || '';
@@ -192,19 +224,19 @@ try {
       const nonOpt = args.filter(a => !a.startsWith('-'));
       const targets = []; let kind = null;
       const redirRe = />>?\s*("[^"]*"|'[^']*'|[^\s&|;<]+)/g; let rm;
-      while ((rm = redirRe.exec(seg)) !== null) { targets.push(rm[1].replace(/^["']|["']$/g, '')); kind = 'write'; }
+      while ((rm = redirRe.exec(seg)) !== null) { targets.push(cleanTarget(rm[1].replace(/^["']|["']$/g, ''))); kind = 'write'; }
       switch (cmd) {
         case 'rm': case 'del': case 'rmdir': case 'unlink': case 'remove-item':
-          kind = 'delete'; nonOpt.forEach(t => targets.push(t)); break;
+          kind = 'delete'; nonOpt.forEach(t => targets.push(cleanTarget(t))); break;
         case 'cp': case 'copy': case 'mv': case 'move': case 'move-item': case 'install':
-          kind = 'write'; if (nonOpt.length) targets.push(nonOpt[nonOpt.length - 1]); break;
+          kind = 'write'; if (nonOpt.length) targets.push(cleanTarget(nonOpt[nonOpt.length - 1])); break;
         case 'mkdir': case 'md': case 'touch': case 'new-item': case 'tee':
-          kind = 'write'; nonOpt.forEach(t => targets.push(t)); break;
+          kind = 'write'; nonOpt.forEach(t => targets.push(cleanTarget(t))); break;
         case 'sed': case 'perl':
-          if (args.some(a => a === '-i' || a.startsWith('-i'))) { kind = 'write'; nonOpt.forEach(t => targets.push(t)); }
+          if (args.some(a => a === '-i' || a.startsWith('-i'))) { kind = 'write'; nonOpt.forEach(t => targets.push(cleanTarget(t))); }
           break;
         case 'dd':
-          args.forEach(a => { const mm = a.match(/^of=(.+)/); if (mm) { targets.push(mm[1].replace(/^["']|["']$/g, '')); kind = 'write'; } });
+          args.forEach(a => { const mm = a.match(/^of=(.+)/); if (mm) { targets.push(cleanTarget(mm[1].replace(/^["']|["']$/g, ''))); kind = 'write'; } });
           break;
         default: break;
       }
