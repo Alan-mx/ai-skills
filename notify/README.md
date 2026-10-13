@@ -1,4 +1,4 @@
-# claude-notify-hook
+# notify-hook
 
 AI 编码 agent 的任务提醒钩子：**单文件 node 实现，零依赖**（只用 node 内置模块），Windows / Git Bash 直接可用。**同一个脚本、同一份配置可同时挂给 Claude Code、Codex 或任何走 hook 机制的 agent**。任务跑完或 agent 等你操作时，往桌面与 IM 推一条消息。
 
@@ -93,7 +93,7 @@ AI 编码 agent 的任务提醒钩子：**单文件 node 实现，零依赖**（
 ## 安装
 
 ```powershell
-# 1. 拷贝到 Claude 配置目录（跨客户端共用一个绝对路径，Codex 也引用这里）
+# 1. 拷到任一固定绝对路径（本机约定 ~/.claude/，Claude 与 Codex 都引用这里）
 Copy-Item notify-hook.js C:\Users\<你>\.claude\
 Copy-Item notify-config.example.json C:\Users\<你>\.claude\notify-config.json   # 填好自己的 url/secret
 ```

@@ -1,6 +1,6 @@
-# claude-guard-hook
+# guard-hook
 
-Windows / Git Bash 环境下的 PreToolUse 安全钩子（个人安全基线，与 `permissions.deny` 分层配合：deny 管前缀稳定的灾难级动作，钩子管模糊/组合场景）。
+Windows / Git Bash 环境下的**通用** PreToolUse 安全钩子（任何实现 Claude Code hook 协议的宿主：Claude Code / Codex；个人安全基线，与 `permissions.deny` 分层配合：deny 管前缀稳定的灾难级动作，钩子管模糊/组合场景）。
 
 **通用**：任何实现 Claude Code hook 协议的宿主都能挂（Claude Code、Codex CLI 已实测同源——Codex 二进制内含 `hookSpecificOutput` / `permissionDecision` / `hook_event_name` 等同一套协议字段）。
 
@@ -20,7 +20,7 @@ Windows / Git Bash 环境下的 PreToolUse 安全钩子（个人安全基线，�
 ## 安装
 
 ```powershell
-# 1. 拷贝到 Claude 配置目录
+# 1. 拷到任一固定绝对路径（本机约定 ~/.claude/，Claude 与 Codex 都引用这里）
 Copy-Item guard-hook.js C:\Users\<你>\.claude\
 Copy-Item guard-hook.test.js C:\Users\<你>\.claude\
 ```
