@@ -1,0 +1,43 @@
+{
+  "minDurationSec": 10,
+  "events": {
+    "Stop": true,
+    "Notification": true
+  },
+  "notificationTypes": ["permission_prompt", "idle_prompt"],
+  "idleSuppressMin": 5,
+  "cleanupDays": 7,
+  "channels": {
+    "desktop": {
+      "enabled": true,
+      "delaySec": 0
+    },
+    "ntfy": {
+      "enabled": false,
+      "delaySec": 0,
+      "url": "https://ntfy.sh/your-random-topic"
+    },
+    "bark": {
+      "enabled": false,
+      "delaySec": 0,
+      "url": "https://api.day.app/your-device-key"
+    },
+    "dingtalk": {
+      "enabled": false,
+      "delaySec": 300,
+      "url": "https://oapi.dingtalk.com/robot/send?access_token=REPLACE_ME",
+      "secret": "SEC_REPLACE_ME"
+    },
+    "feishu": {
+      "enabled": false,
+      "delaySec": 300,
+      "url": "https://open.feishu.cn/open-apis/bot/v2/hook/REPLACE_ME",
+      "secret": ""
+    },
+    "wecom": {
+      "enabled": false,
+      "delaySec": 300,
+      "url": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE_ME"
+    }
+  }
+}
