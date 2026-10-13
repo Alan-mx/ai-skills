@@ -91,6 +91,8 @@
 
 新增字段必须走完整链路检查：Entity → VO → DTO → Mapper XML（resultMap / INSERT / UPDATE / 显式 SELECT）→ 迁移 SQL 脚本。
 
+Mapper XML 中 SQL 的 `<` `>` `&` 必须转义为 `&lt;` `&gt;` `&amp;`；`mvn compile` 不解析 mapper XML，编译通过不代表 XML 合法，改完必须做良构校验。
+
 默认不删除已有字段 / 接口返回字段；用户明确要求删除时反向全链路检查（库 → XML → DTO/VO → Entity → Service → Controller → 调用方）。
 
 迁移 SQL 一律写成脚本文件交用户手动执行，AI 不直接执行数据库变更。
