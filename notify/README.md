@@ -1,6 +1,6 @@
 # claude-notify-hook
 
-Claude Code 任务提醒钩子：单文件 node 实现，零依赖（只用 node 内置模块），Windows / Git Bash 直接可用。任务跑完或 Claude 等你操作时，往桌面与 IM 推一条消息。
+AI 编码 agent 的任务提醒钩子：**单文件 node 实现，零依赖**（只用 node 内置模块），Windows / Git Bash 直接可用。**同一个脚本、同一份配置可同时挂给 Claude Code、Codex 或任何走 hook 机制的 agent**。任务跑完或 agent 等你操作时，往桌面与 IM 推一条消息。
 
 ## 分级推送与「响应即取消」
 
@@ -15,20 +15,73 @@ Claude Code 任务提醒钩子：单文件 node 实现，零依赖（只用 node
 
 ## 事件
 
+事件名按大小写/分隔符归一化后匹配（`UserPromptSubmit` / `user-prompt-submit` / `prompt_submit` 等价），各客户端命名差异由代码吸收。
+
 | 事件 | 行为 |
 |------|------|
 | `UserPromptSubmit` | 记录任务开始时间；清除待发标记（=取消排队中的兜底推送） |
-| `Stop` | 任务完成通知，含项目名与用时；短于 `minDurationSec` 的任务不打扰 |
-| `Notification` | 权限请求 / 等待输入通知；同一会话内 idle 首次提醒，`idleSuppressMin` 分钟内重复 idle 静默 |
+| `Stop` | 任务完成通知，含耗时；短于 `minDurationSec` 的任务不打扰 |
+| `Notification` | 权限请求 / 等待输入等通知；同一会话内 idle 首次提醒，`idleSuppressMin` 分钟内重复 idle 静默 |
+| `PreToolUse` / `PostToolUse` / `SessionStart` | 只当作「用户在动」的信号，清除待发标记（没有 UserPromptSubmit 的 agent 靠它取消） |
 | `SessionEnd` | 清理本会话状态，并扫掉超过 `cleanupDays` 的旧状态文件 |
 
-钩子本体不碰网络：只写状态并 spawn 一个分离子进程去发，子进程 `unref()` 后与钩子生命周期无关，Claude Code 侧零等待。任何异常一律 fail-open 退出，通知钩子不会阻塞会话。
+## 消息格式
+
+标题 + 三～四行正文；**客户端名在标题里，正文与客户端无关**。内容只定义一次，**各渠道各自渲染**：钉钉/企微走 `markdown`（有加粗与引用条），桌面通知 / Bark / ntfy / 飞书走纯文本（不会把 `**`、`>` 记号印出来）。
+
+钉钉 / 企业微信渲染后：
+
+```
+**✔ 任务完成 · Claude Code**
+
+> **会话 ID:** 9e4c8bea-628a-43
+>
+> **状态:** 已完成
+>
+> **耗时:** 1分35秒
+>
+> **项目:** D:\ideaProject\seacon-pms-service-parent
+```
+
+桌面通知 / 推送类渠道（纯文本）：
+
+```
+✔ 任务完成 · Claude Code
+会话 ID: 9e4c8bea-628a-43
+状态: 已完成
+耗时: 1分35秒
+项目: D:\ideaProject\seacon-pms-service-parent
+```
+
+- 图标按事件区分、量级轻于 emoji：完成 `✔`、权限请求 `❗`、等待输入 `…`；未知类型不加图标（`KIND_ICON` 一处可改，去掉图标就是留空）
+- 耗时人类可读（`44秒` / `1分35秒` / `1小时39分`）；**耗时未知时整行省略**，不印「未知」废行
+- 通知类事件（权限请求 / 等待输入 / 未知类型）同构：`状态` 行放原始 message，无耗时行
+- 会话 ID 取前 16 位
+
+## 多客户端
+
+**客户端名**（标题里的 `· XXX`）三级来源，先命中先用：
+
+1. 注册命令里的 `--app="Claude Code"`（最稳，推荐）
+2. 配置 `appName`
+3. 环境变量推断（`CLAUDECODE`/`CLAUDE_PROJECT_DIR` → Claude Code；`CODEX_HOME`/`CODEX_SANDBOX` → Codex）
+
+**载荷字段**兼容读取，换 agent 换字段名不会静默失灵：
+
+| 语义 | 接受的键 |
+|------|---------|
+| 事件名 | `hook_event_name` / `event_name` / `eventName` / `event` / `type` |
+| 会话 ID | `session_id` / `sessionId` / `thread_id` / `threadId` / `conversation_id` |
+| 工作目录 | `cwd` / `project_path` / `working_dir` / `workdir` … |
+| 状态 / 消息 | `status` / `stop_reason` / `reason`；`message` / `text` / `summary` |
+
+**通知类型**：已知类型（`permission_prompt` / `idle_prompt` / `auth_success` / `elicitation_dialog`）按 `notificationTypes` 白名单过滤；**类型缺失或本客户端不认识时照发**，宁可多一条也不漏报。
 
 ## 渠道配置
 
 | 渠道 | 需要的字段 | 说明 |
 |------|-----------|------|
-| `desktop` | 无 | Windows 托盘气泡通知（Win10/11 渲染为系统通知），仅 win32 生效 |
+| `desktop` | 无 | Windows 托盘气泡通知（Win10/11 渲染为系统通知），非 win32 平台自动跳过 |
 | `ntfy` | `url` | `https://ntfy.sh/<随机topic>`，手机装 ntfy App 订阅同一 topic；可自建 |
 | `bark` | `url` | `https://api.day.app/<deviceKey>`，iOS |
 | `dingtalk` | `url` + `secret` | 群机器人加签：`timestamp`(毫秒) 与 HMAC-SHA256(`secret`, `ts\nsecret`) |
@@ -40,40 +93,61 @@ Claude Code 任务提醒钩子：单文件 node 实现，零依赖（只用 node
 ## 安装
 
 ```powershell
-# 1. 拷贝到 Claude 配置目录
+# 1. 拷贝到 Claude 配置目录（跨客户端共用一个绝对路径，Codex 也引用这里）
 Copy-Item notify-hook.js C:\Users\<你>\.claude\
 Copy-Item notify-config.example.json C:\Users\<你>\.claude\notify-config.json   # 填好自己的 url/secret
 ```
 
-2. 在 `~/.claude/settings.json` 注册四个事件（**该文件含个人凭据，永不入库**）：
+2. 注册 hooks（**这两个文件都含个人凭据，永不入库**）：
+
+Claude Code `~/.claude/settings.json`：
 
 ```json
 "hooks": {
-  "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\"" } ] } ],
-  "Stop":             [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\"" } ] } ],
-  "Notification":     [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\"" } ] } ],
-  "SessionEnd":       [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\"" } ] } ]
+  "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\" --app=\"Claude Code\"" } ] } ],
+  "Stop":             [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\" --app=\"Claude Code\"" } ] } ],
+  "Notification":     [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\" --app=\"Claude Code\"" } ] } ],
+  "SessionEnd":       [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\" --app=\"Claude Code\"" } ] } ]
 }
 ```
 
-3. 单次发送排障：
+Codex `~/.codex/hooks.json`（命令换成 `--app="Codex"`，其余同上；改完需在 Codex 里 `/hooks` 复核信任）：
 
-```powershell
-'{"hook_event_name":"Stop","session_id":"smoke","cwd":"D:/x/demo"}' | node $env:USERPROFILE\.claude\notify-hook.js
+```json
+"hooks": {
+  "UserPromptSubmit": [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\" --app=\"Codex\"" } ] } ],
+  "Stop":             [ { "hooks": [ { "type": "command", "command": "node \"C:\\Users\\<你>\\.claude\\notify-hook.js\" --app=\"Codex\"" } ] } ]
+}
 ```
 
-4. 回归验证：`node notify-hook.test.js`，期望 `ALL PASS (23 cases)`。
+3. 自检（把已启用渠道各打一遍，打印返回码；有失败渠道退出码为 1）：
 
-状态文件在 `~/.claude/notify-state/`（会话开始时间、待发标记、任务描述），可随时清空；`NOTIFY_CONFIG` 环境变量可指向替代配置，便于试跑。
+```powershell
+node $env:USERPROFILE\.claude\notify-hook.js --app="Claude Code" --test
+```
+
+4. 回归验证：`node notify-hook.test.js`，期望 `ALL PASS (32 cases)`。
+
+## 命令行与配置查找
+
+| 参数 | 作用 |
+|------|------|
+| `--app=<名称>` | 标题里的客户端名（也可用配置 `appName`） |
+| `--config=<路径>` | 指定配置文件；等价于环境变量 `NOTIFY_CONFIG` |
+| `--test` | 自检发送，忽略 `delaySec`、不写 pending |
+| `--job=<文件>` | 内部分离子进程入口，勿手动调用 |
+
+配置查找顺序：`--config=` > `NOTIFY_CONFIG` > `~/.claude/notify-config.json`（都没有则用内置默认值）。状态目录默认 `~/.claude/notify-state/`（配置 `stateDir` 可改），多客户端共用一个目录没有冲突（键是会话 ID）；配置缺失/损坏一律回落默认值，不报错。
 
 ## 维护约定
 
-本目录是**源**；`~/.claude/` 下是**生效副本**。修改流程：改本目录 → 跑测试全绿 → commit → 拷回 `~/.claude/`。
+本目录是**源**；`~/.claude/` 下是**生效副本**。修改流程：改本目录 → 跑测试全绿 → commit → 拷回 `~/.claude/`（Claude 与 Codex 共用这一个副本）。
 
 ## 已知局限
 
-- 桌面通知走 PowerShell 托盘气泡（额外进程存活 9 秒），无 WinRT 应用标识注册问题；但仅实现 Windows，其他平台该渠道直接跳过。
+- 桌面通知走 PowerShell 托盘气泡（子进程存活 9 秒），无 WinRT 应用标识注册问题；但只实现了 Windows，其他平台该渠道跳过。
 - 兜底渠道靠分离子进程 `setTimeout` 排队，机器重启/关机则排队丢失（不会补发）——兜底本就允许丢，快渠道在事件当时已发。
-- node 的 HTTP 请求不读系统代理；若某渠道需经代理访问，得给该渠道单独配代理（当前未实现）。
+- node 的 HTTP 请求不读系统代理；若某渠道需经代理访问，得单独配代理（当前未实现）。
 - 企业微信文本消息上限 2048 字节，超长内容会被截断（本钩子消息很短，未做处理）。
 - idle 抑制按会话记录，多会话并行时各自独立。
+- 客户端名靠 `--app` 显式传入最可靠；环境变量推断只覆盖 Claude Code / Codex 两家的已知变量名。
