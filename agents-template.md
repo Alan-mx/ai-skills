@@ -97,6 +97,14 @@ Mapper XML 中 SQL 的 `<` `>` `&` 必须转义为 `&lt;` `&gt;` `&amp;`；`mvn 
 
 迁移 SQL 一律写成脚本文件交用户手动执行，AI 不直接执行数据库变更。
 
+数据库字符集与排序规则统一：{{本项目统一口径，如 utf8mb4 + utf8mb4_unicode_ci}}。建表 DDL 必须**显式**声明 charset **和** collation —— MySQL 5.7 下 utf8mb4 的默认 collation 是 `utf8mb4_general_ci`，只写 `DEFAULT CHARSET=utf8mb4` 会静默建出非预期 collation，本类漂移极难在评审时看出。
+
+同字符集、不同 collation 的**列对列比较**（`=`、JOIN、UNION 同列位）会直接报错：**UNION 报 1271、比较报 1267**；跨字符集（utf8mb3 ↔ utf8mb4）由 MySQL 自动转换、不报错。所以**改某张表的 collation 前，必须先全量扫出它参与的所有跨表字符串比较（`a.col = b.col`、UNION 同列位、`IN (SELECT ...)`，扫描不许截断），成组一起改** —— 拆开改必然制造新故障。
+
+改表规程：转前 `SHOW CREATE TABLE`（或 `mysqldump --no-data`）存档 → 执行 `ALTER TABLE ... CONVERT TO CHARACTER SET ... COLLATE ...`（空表直接 DROP + 按改好的 DDL 重建更干净）→ 转后逐列核对 collation / 列 COMMENT / 列 DEFAULT / auto_increment。
+
+排查纪律：见到 **1271 / 1267** 先查两侧 collation，**不要先怀疑 SQL 逻辑**。
+
 {{ORM 约定：自动填充字段、wrapper-only 更新要补哪些审计字段等}}
 
 ## 7. 构建与测试
