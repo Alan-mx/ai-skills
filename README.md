@@ -7,6 +7,7 @@
 | Skill | 用途 |
 |---|---|
 | [dev-flow](./dev-flow/) | 开发流程关口。新需求 G1-G6：需求澄清 → 规格（EARS 验收标准）→ 先设计表再设计接口 → 逐接口垂直实现 → 收敛验证；修 bug B1-B3：根因四阶段 → 最小修复 → 验证（verified/partial/failed）；G3.5 工作量评估：人+AI 协作口径、条目 0.2~1 天、+1 天缓冲，核心输出预计完成日期。借鉴 obra/superpowers `v7.0.0` 与 github/spec-kit `v1.1.3`，版本基准见 SKILL.md 末尾「借鉴来源」。 |
+| [freebuff-delegate](./freebuff-delegate/) | 仅显式调用。把明确授权且可隔离的编码子任务交给本机 Freebuff CLI：先确认额度与数据边界，再通过 PTY 委派；Freebuff 完成后由 Codex 独立检查 diff、运行验证，禁止自行 commit / push。 |
 | [agents-template.md](./agents-template.md) | AGENTS.md 骨架模板。新仓库起步用：拷到仓库根改名为 AGENTS.md，填 `{{占位符}}`、删不适用节。通用节（总原则/分层/事务/编码口径/字段链路/Git/验证/禁止清单）已固化，领域硬规则留占位。由 pms 与 ship-shore-sync 两份实战版提炼（2026-10-10）。 |
 | [guard](./guard/) | guard-hook：**通用** PreToolUse 安全钩子（Claude Code / Codex 等实现该协议的宿主通用；DB 只读 / 密钥读取与搬运 / cwd 外只读 / 回收站删除引导；字段名与工具名多套容错、拦截输出兼给新旧两种形状，127 用例 + 输出形状回归）。`~/.claude/` 下为生效副本，本目录为源；settings.json 含凭据永不入库。 |
 | [notify](./notify/) | notify-hook：**通用**任务提醒钩子（Claude Code / Codex 共用同一脚本与配置）。单文件 node 零依赖，每渠道各配宽限期（默认：桌面/ntfy/Bark 立即，钉钉/飞书/企微 10 秒未回话才推）+ 响应即取消（用户一发消息即作废排队中的推送）；客户端名走 `--app=`，载荷字段多套命名兼容；`--test` 自检打所有渠道并打印返回码，33 用例回归。配置 `~/.claude/notify-config.json` 含 webhook 凭据，永不入库。 |
