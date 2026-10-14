@@ -1,6 +1,6 @@
 interface:
   display_name: "Freebuff 委派"
-  short_description: "显式授权后，将隔离编码子任务交给本机 Freebuff CLI 执行并复核"
+  short_description: "Codex 总控下，将低频可选编码执行包交给本机 Freebuff 并独立复核"
   default_prompt: "使用 $freebuff-delegate 将这个隔离编码任务交给 Freebuff 执行并复核结果。"
 
 policy:
