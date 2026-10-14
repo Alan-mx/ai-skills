@@ -10,9 +10,9 @@
 //   PreToolUse/PostToolUse/SessionStart -> 只当作"用户在动"的信号，清除 pending
 //   SessionEnd       -> 清理本会话状态 + 扫掉过期状态文件
 //
-// Tiered delivery (borrowed from cc-notify-hooks): 快渠道（desktop / ntfy / bark）秒级即发；
-// 兜底渠道（dingtalk / feishu / wecom）延迟 delaySec 后才发，发之前先看 pending 是否还在——
-// 用户已响应（pending 被删或代次号变了）则整条取消，不会离开回来还挨一顿推。
+// 推送时机：每个渠道各配一个宽限期 delaySec——事件发生先记账，到点前用户只要提交一条消息
+// （UserPromptSubmit）该渠道整条作废，到点还没回才真发。桌面/ntfy/Bark 默认 0 秒（立即触达），
+// IM 渠道默认 10 秒（给「回到电脑前」的宽限）；调大即退化为离开电脑时的兜底，调 0 即立刻推。
 //
 // 钩子本体不碰网络：只写 pending 与任务描述，然后 spawn 一个分离子进程去发（--job=<file>），
 // 子进程 unref 后与钩子生命周期无关，故 agent 侧零等待。
@@ -54,9 +54,9 @@ const DEFAULT_CONFIG = {
     desktop:  { enabled: true,  delaySec: 0 },
     ntfy:     { enabled: false, delaySec: 0,   url: 'https://ntfy.sh/your-random-topic' },
     bark:     { enabled: false, delaySec: 0,   url: 'https://api.day.app/your-device-key' },
-    dingtalk: { enabled: false, delaySec: 300, url: 'https://oapi.dingtalk.com/robot/send?access_token=xxx', secret: '' },
-    feishu:   { enabled: false, delaySec: 300, url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx', secret: '' },
-    wecom:    { enabled: false, delaySec: 300, url: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx' }
+    dingtalk: { enabled: false, delaySec: 10,  url: 'https://oapi.dingtalk.com/robot/send?access_token=xxx', secret: '' },
+    feishu:   { enabled: false, delaySec: 10,  url: 'https://open.feishu.cn/open-apis/bot/v2/hook/xxx', secret: '' },
+    wecom:    { enabled: false, delaySec: 10,  url: 'https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx' }
   }
 };
 

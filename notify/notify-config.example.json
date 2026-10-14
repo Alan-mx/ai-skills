@@ -24,19 +24,19 @@
     },
     "dingtalk": {
       "enabled": false,
-      "delaySec": 300,
+      "delaySec": 10,
       "url": "https://oapi.dingtalk.com/robot/send?access_token=REPLACE_ME",
       "secret": "SEC_REPLACE_ME"
     },
     "feishu": {
       "enabled": false,
-      "delaySec": 300,
+      "delaySec": 10,
       "url": "https://open.feishu.cn/open-apis/bot/v2/hook/REPLACE_ME",
       "secret": ""
     },
     "wecom": {
       "enabled": false,
-      "delaySec": 300,
+      "delaySec": 10,
       "url": "https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE_ME"
     }
   }
