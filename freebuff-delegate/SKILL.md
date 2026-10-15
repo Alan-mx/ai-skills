@@ -5,7 +5,7 @@ description: 在任意支持本 skill 的 Agent 总控下，将低频、可选�
 
 # Freebuff 委派
 
-本 skill 不绑定 Codex。下文“主控 Agent”指当前调用本 skill 的执行者，包括 Codex、Claude Code 或其他能启动并读写终端进程的 Agent；宿主具备 PTY 或等价交互式终端能力即可使用。
+本 skill 不绑定 Codex。下文“主控 Agent”指当前调用本 skill 的执行者，包括 Codex、Claude Code 或其他能启动并读写终端进程的 Agent；宿主具备 PTY 或等价交互式终端能力即可使用——但 **Windows 上实测 PTY 发控制字符不可靠**，优先按下面的「实操手册」用操作系统级按键注入。
 
 把 Freebuff 当作低频、可选、受监督且额度稀缺的编码执行者，而不是可信的最终决策者。默认由主控 Agent 直接完成任务；只有明确要求且任务值得消耗一段会话时，才派 Freebuff 干活，但不能把完成责任转给它。
 
@@ -69,9 +69,86 @@ description: 在任意支持本 skill 的 Agent 总控下，将低频、可选�
 
 一个任务包默认只覆盖一个可独立审查的垂直切片，不把整个模块或整批接口一次性交给 Freebuff。一次会话内执行多个切片时，只允许执行主控 Agent 预先写好的顺序，不现场扩张。
 
+## 实操手册（Windows + 手动开窗口，已实测）
+
+### 顺序：模型必须先选好
+
+Freebuff 的**第一条消息就开始计费**，而用户手动打开时使用的是界面默认模型（可能是便宜的
+flash 档）。所以固定顺序是：
+
+1. **用户先打开 Freebuff**（`freebuff --cwd <工作目录>`），用 `/model` 选好模型；
+2. 主控开始接管输入、发任务包。
+
+主控在派单前要确认三件事并告诉用户：**会话里选中的模型 / 剩余时长 / 剩余额度**。模型没选好
+就先别发消息——发了就以默认模型烧掉一段额度。
+
+### 并发检查
+
+单账号并发为 1。启动前先列进程（Windows）：
+
+```powershell
+Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'freebuff.exe' } |
+  Select-Object ProcessId, CreationDate
+```
+
+多于一个时只关多余的那个 `freebuff.exe` 子进程，不要动无关的 node / 其他 agent 进程。
+
+### 输入：不要依赖主控自己的 PTY
+
+**实测结论**：主控用 `exec_command(tty:true)` + `write_stdin` 发控制字符**不可靠**——
+回车会被吞或变成字面量 `\r`，退格只生效一个，TUI 里做不了编辑。可行的是操作系统级按键注入：
+
+1. 用 `EnumWindows` 找到 Freebuff 的终端窗口（标题以 `Freebuff:` 开头，会随会话内容变化）；
+2. `SetForegroundWindow` 把它置前；
+3. `SendInput` 发键：文本用 `KEYEVENTF_UNICODE` 逐字符，回车用 `VK_RETURN(0x0D)`。
+4. **必须分块**：每块约 25 字符、间隔 100–150ms。一次性灌几百字符会被 TUI 丢掉（实测丢过 446 字符）。
+
+输入框的小控件不接受 HOME/DELETE（删不掉行首字符），所以宁可**一次输对**，不要在框里做复杂编辑。
+
+### 观察：优先读会话文件，而不是盯屏
+
+Freebuff 会把会话写成本地文件，主控可以直接读，省 token 也不打扰用户：
+
+```
+~/.config/manicode/projects/<工作目录名>/chats/<UTC 时间戳>/
+  chat-messages.json   # 完整的工具调用与文本轨迹（判断"做到哪一步"）
+  log.jsonl            # 运行/错误日志（找 "Main prompt finished"、网络错误）
+  run-state.json       # 运行状态
+```
+
+需要看屏幕时（例如确认模型名、额度、弹窗）：`AttachConsole(pid)` 后用
+`CreateFileW("CONOUT$")` + `ReadConsoleOutputCharacterW` 读控制台屏幕缓冲区；
+**不能用 `GetStdHandle`**，主控进程的标准句柄通常被重定向，会拿到无效句柄。
+
+### 网络中断的恢复
+
+常见错误：`unknown certificate verification error`（模型流被中断）。日志特征：
+`Agent execution failed` → `Main prompt finished ... outputType: 'error'` → `Processing lock released`。
+**会话仍在**，直接重发同一条消息即可继续，不必重开会话。
+
+### 其他实测坑
+
+- 首次运行会自动更新 CLI（例如 0.2.22 → 0.2.27），更新中途启动会报错，等更新完成再派单。
+- 还没发第一条消息时，面板显示 `Your first message starts the session`——这时关掉窗口不计费。
+- 会话在跑时输入框仍可输入，消息会排队；`--continue` 可续接已有会话。
+- 任务完成后由用户 `✕ End session` 结束；主控只终止自己起的 `freebuff.exe`。
+
+### 敏感数据：把边界做在前面
+
+Freebuff 界面明确提示数据可能用于训练。派单前主控要自己做完：
+
+- 给 Freebuff 一个**专用的临时工作目录**，真实个人资料 / 凭据 / 客户数据不放进这个目录；
+- 样本先脱敏（替换姓名、证件号、手机号、单位、学校等直接标识符），并对脱敏结果做一遍扫描复核；
+- 派单文本里只引用该目录内的文件，明确"不要读写工作目录之外的路径"。
+
 ## PTY 交互
 
 Freebuff 是交互式 TUI，没有稳定的一次性 prompt 参数。使用宿主 Agent 的 PTY、终端会话或等价交互式终端能力；例如 Codex 可用 `exec_command(tty: true)` 配合 `write_stdin`，其他宿主使用自身的终端启动、输入和读取能力。宿主没有原生 PTY 时，可使用平台上的伪终端包装工具，但不得把需要 TTY 的 TUI 当作普通非交互管道运行。
+
+> **实测警告（Windows）**：这条路走不通的部分比想象中多——`write_stdin` 发的回车/退格常被吞掉
+> 或变成字面量，TUI 里既提交不了消息、也改不动输入框。此路不通时改用上面的「实操手册」：
+> 先由用户开窗口并选好模型，主控再用 `EnumWindows` + `SetForegroundWindow` + `SendInput` 注入按键，
+> 并用会话文件（`chat-messages.json` / `log.jsonl`）跟踪进度。
 
 1. 启动当前执行包的交互式终端：
 
