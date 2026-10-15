@@ -85,6 +85,9 @@ Processing lock released
 - 面板显示 `Your first message starts the session` 时，尚未计费。
 - 会话运行时输入可能排队；`--continue` 可续接已有会话。
 - 实测只执行 `stop` 后，积分仍为 `10/25`，重新启动会显示 `Session active`；本地进程关闭期间仍按真实时间倒计时。随后执行 `/end-session`，余额从 `10/25` 回到 `24/25`，界面恢复为 `Your first message starts the session`，证明服务端会话结束并退还了未使用积分。
+- `15 Freebucks/hr` 是按小时预授权/封顶，不是按墙钟固定收费。两次短会话的结算结果分别为 `25→10→24` 和 `24→9→23`，净消耗都是 `1 Freebuck`；第二次还剩约 23 分钟也未按分钟扣 5～6 个积分。
+- 客户端累计 `creditsUsed`、`directCreditsUsed`、`onCostCalculated`、`sessionCreditsUsed`，由服务端用量结算；未公开精确 token→Freebucks 公式，短会话可能有最低 1 个或向上取整。
+- 评估成本时不要看剩余分钟数，按“启动前余额 − `/end-session` 后余额”记录实际净消耗。
 - 包装器直接运行 `~/.config/manicode/freebuff.exe`，绕过启动器更新检查；需要更新时先正常运行一次 `freebuff`。
 - 派发测试型任务前先确认 `python`、`node` 等命令指向真实运行时；Windows Store 别名可能返回 `exit 49`，会浪费会话时间。任务包优先写明确的解释器路径或预先修正 PATH。
 - `raw.log` 可能包含提示词、代码和广告。命中敏感内容时，任务结束后删除对应会话目录。
