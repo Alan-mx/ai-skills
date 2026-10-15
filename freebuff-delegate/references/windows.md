@@ -24,6 +24,8 @@ python scripts/freebuff_conpty.py send --text-file "C:\task-packet.txt"
 python scripts/freebuff_conpty.py key enter
 python scripts/freebuff_conpty.py wait --idle-ms 5000 --timeout 3600
 python scripts/freebuff_conpty.py status --tail 20
+python scripts/freebuff_conpty.py send --text "/end-session"
+python scripts/freebuff_conpty.py key enter
 python scripts/freebuff_conpty.py stop
 ```
 
@@ -32,7 +34,8 @@ python scripts/freebuff_conpty.py stop
 - `send` 发送文本。长任务实测用 `send` 后再单独 `key enter` 更可靠；`--enter` 仅作为简单文本的实验选项。`key` 支持 `enter/esc/up/down/left/right/tab/backspace/ctrl-c`。
 - `status --tail` 返回净化后的屏幕尾部，不返回完整 ANSI 重绘流。
 - `wait` 默认在输出空闲 3 秒或进程结束时返回。
-- `stop` 只结束本包装器创建的会话树。
+- `stop` 只结束本包装器创建的本地进程树，不等于服务端 `End session`；不退款，倒计时也不暂停。
+- `/end-session` 或界面 `✕ End session` 才会结束服务端会话，并按实际使用结算、退回未使用积分。
 
 如果会话目录由主控显式指定，可给每条命令加 `--session <session_dir>`；否则使用最近一次会话。
 
@@ -81,6 +84,7 @@ Processing lock released
 - 启动器可能自动更新 Freebuff；更新完成后才能稳定启动。
 - 面板显示 `Your first message starts the session` 时，尚未计费。
 - 会话运行时输入可能排队；`--continue` 可续接已有会话。
+- 实测只执行 `stop` 后，积分仍为 `10/25`，重新启动会显示 `Session active`；本地进程关闭期间仍按真实时间倒计时。随后执行 `/end-session`，余额从 `10/25` 回到 `24/25`，界面恢复为 `Your first message starts the session`，证明服务端会话结束并退还了未使用积分。
 - 包装器直接运行 `~/.config/manicode/freebuff.exe`，绕过启动器更新检查；需要更新时先正常运行一次 `freebuff`。
 - 派发测试型任务前先确认 `python`、`node` 等命令指向真实运行时；Windows Store 别名可能返回 `exit 49`，会浪费会话时间。任务包优先写明确的解释器路径或预先修正 PATH。
 - `raw.log` 可能包含提示词、代码和广告。命中敏感内容时，任务结束后删除对应会话目录。
