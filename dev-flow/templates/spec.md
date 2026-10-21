@@ -10,11 +10,11 @@
 
 作为 {{角色}}，我要 {{动作}}，以便 {{价值}}。
 
-## 验收标准（EARS，每条可判定通过/不通过）
+## 验收标准（EARS，每条可判定通过/不通过；编号 AC1、AC2… 全程稳定，供 G3/G5 追溯）
 
-- WHEN {{触发条件}} THE SYSTEM SHALL {{系统响应}}
-- WHEN {{触发条件}} THE SYSTEM SHALL {{系统响应}}
-- IF {{前置状态}} THEN THE SYSTEM SHALL {{约束行为}}
+- AC1: WHEN {{触发条件}} THE SYSTEM SHALL {{系统响应}}
+- AC2: WHEN {{触发条件}} THE SYSTEM SHALL {{系统响应}}
+- AC3: IF {{前置状态}} THEN THE SYSTEM SHALL {{约束行为}}
 
 ## 字段口径
 
