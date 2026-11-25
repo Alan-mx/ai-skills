@@ -148,7 +148,7 @@ description: 开发流程关口。新需求开发（拿到 PRD/原型/功能描�
 
 ## 借鉴来源（版本基准）
 
-本 skill 对以下仓库为**思想借鉴，无代码依赖**，上游升级不要求同步；仅当上游方法论大改版时（如粒度定义 / 验证规则 / 调查流程重构），人工看 release notes 决定是否吸收，吸收后更新此处版本号：
+本 skill 对以下仓库为**思想借鉴，无代码依赖**，上游升级不要求同步；仅当上游方法论大改版时（如粒度定义 / 验证规则 / 调查流程重构），人工看 release notes 决定是否吸收，核对后更新此处版本号：
 
-- [obra/superpowers](https://github.com/obra/superpowers) `v7.0.0`（2026-10-10）：writing-plans 的「写给没见过代码库的工程师」、任务粒度与交付前自检（G3/G4）；systematic-debugging 的根因铁律、调查阶段、组件边界取证、正常样本对照与假设验证纪律（B1/B2）；verification-before-completion 的验证铁律与借口对照表（G5/B3）；brainstorming 的回放确认、澄清纪律与动态升档（G1/G4）；executing-plans 的裁决落盘、进度台账与审查分级处置（G4/G6）
-- [github/spec-kit](https://github.com/github/spec-kit) `v1.2.2`（2026-10-19）：spec 的用户故事 + EARS 验收标准结构与稳定编号追溯（G2/G3/G5）；bug 三步 assess→fix→test 模型（B1-B3）；clarify 的问题预算、回写不留矛盾与模糊词量化（G1/G2）；converge 的完成声明非证据、全量重验与四类差距（G5）
+- [obra/superpowers](https://github.com/obra/superpowers) `v7.0.2`（2026-11-03）：writing-plans 的「写给没见过代码库的工程师」、任务粒度与交付前自检（G3/G4）；systematic-debugging 的根因铁律、调查阶段、组件边界取证、正常样本对照与假设验证纪律（B1/B2）；verification-before-completion 的验证铁律与借口对照表（G5/B3）；brainstorming 的回放确认、澄清纪律与动态升档（G1/G4）；executing-plans 的裁决落盘、进度台账与审查分级处置（G4/G6）
+- [github/spec-kit](https://github.com/github/spec-kit) `v1.4.4`（2026-11-23）：spec 的用户故事 + EARS 验收标准结构与稳定编号追溯（G2/G3/G5）；bug 三步 assess→fix→test 模型（B1-B3）；clarify 的问题预算、回写不留矛盾与模糊词量化（G1/G2）；converge 的完成声明非证据、全量重验与四类差距（G5）
